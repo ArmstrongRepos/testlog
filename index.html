@@ -15,59 +15,269 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Test Log">
 <style>
-  :root { --brand: #0b3d91; }
+  :root { --brand: #0b3d91; --red: #e50c2b; --ink: #0d1b2e; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; background: var(--brand); color: #fff; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--brand); }
-  #splash { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: var(--brand); transition: opacity .3s; }
+
+  #splash { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: var(--brand); transition: opacity .3s; z-index: 3; }
   #splash img { width: min(260px, 70vw); height: auto; display: block; margin: 0 auto; }
-  #splash .sub { margin: 14px 0 0; font: 700 .8rem system-ui, sans-serif; letter-spacing: .32em; text-transform: uppercase; opacity: .85; }
-  #splash p { margin: 14px 0 0; opacity: .8; font-size: .95rem; }
+  .sub { margin: 14px 0 0; font: 700 .8rem system-ui, sans-serif; letter-spacing: .32em; text-transform: uppercase; opacity: .85; }
   .bar { width: 120px; height: 3px; margin: 26px auto 0; background: rgba(255,255,255,.2); border-radius: 2px; overflow: hidden; }
-  .bar i { display: block; width: 40%; height: 100%; background: #e50c2b; border-radius: 2px; animation: slide 1.1s ease-in-out infinite; }
+  .bar i { display: block; width: 40%; height: 100%; background: var(--red); border-radius: 2px; animation: slide 1.1s ease-in-out infinite; }
   @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
-  @media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; } }
   #splash.gone { opacity: 0; pointer-events: none; }
-  #offline { display: none; margin-top: 18px; }
-  #offline button { margin-top: 12px; font: 700 1rem system-ui, sans-serif; color: var(--brand); background: #fff; border: 0; border-radius: 6px; padding: 12px 22px; }
-  @media (prefers-reduced-motion: reduce) { #splash { transition: none; } }
+
+  /* Offline logging */
+  #off { position: fixed; inset: 0; overflow-y: auto; background: var(--brand); z-index: 4;
+         padding: calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 28px); }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .top img { width: 150px; height: auto; }
+  .top .sub { margin: 0; font-size: .68rem; }
+  .banner { background: rgba(0,0,0,.22); border-left: 3px solid var(--red); border-radius: 6px; padding: 10px 12px; font-size: .92rem; margin-bottom: 16px; }
+  .panel { background: #fff; color: var(--ink); border-radius: 10px; padding: 16px; }
+  label { display: block; font-weight: 700; font-size: .85rem; margin: 0 0 6px; }
+  input[type=text], textarea { width: 100%; font: inherit; color: var(--ink); border: 1.5px solid #c9d3e3; border-radius: 8px; padding: 10px 12px; background: #fff; }
+  textarea { min-height: 170px; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .field { margin-bottom: 14px; }
+  .hint { font-size: .82rem; color: #4b5b73; margin: 6px 0 0; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn { font: 700 1rem system-ui, sans-serif; border: 0; border-radius: 8px; padding: 13px 20px; background: var(--red); color: #fff; cursor: pointer; }
+  .btn:disabled { opacity: .55; }
+  .ghost { font: 600 .9rem system-ui, sans-serif; border: 1.5px solid #c9d3e3; border-radius: 8px; padding: 9px 14px; background: #fff; color: var(--brand); cursor: pointer; }
+  .light { background: transparent; color: #fff; border-color: rgba(255,255,255,.55); }
+  #thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  #thumbs figure { position: relative; margin: 0; }
+  #thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; display: block; }
+  #thumbs button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--ink); color: #fff; font-size: 14px; line-height: 1; }
+  #offMsg { min-height: 1.4em; margin: 12px 0 0; font-size: .9rem; }
+  #offMsg.ok { color: #0a7a3d; } #offMsg.err { color: var(--red); }
+  h2 { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; margin: 26px 0 10px; opacity: .9; }
+  .item { background: rgba(255,255,255,.1); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: .9rem; }
+  .item b { display: block; font-size: .78rem; opacity: .85; font-weight: 600; }
+  .item .err { color: #ffd0d6; font-size: .82rem; }
+  .item button { margin-top: 6px; }
+
+  /* "Waiting to send" badge shown over the live app */
+  #pill { position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 8px);
+          display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px);
+          background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 7px 14px; font: 600 .82rem system-ui, sans-serif;
+          box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
+  #pill i { width: 8px; height: 8px; border-radius: 50%; background: #ffb020; flex: none; }
+  @media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; } #splash { transition: none; } }
 </style>
 </head>
 <body>
 <iframe id="app" title="Armstrong Test Log" allow="microphone; camera; clipboard-write; fullscreen"></iframe>
+
 <div id="splash" role="status">
   <div>
     <img src="icons/wordmark.png" alt="Armstrong">
     <div class="sub">Test Log</div>
-    <div class="bar" id="msg" aria-label="Loading"><i></i></div>
-    <div id="offline">
-      <p>No connection right now. The test log needs internet to send feedback.</p>
-      <button type="button" onclick="location.reload()">Try again</button>
-    </div>
+    <div class="bar" aria-label="Loading"><i></i></div>
   </div>
 </div>
+
+<button id="pill" type="button" hidden><i></i><span id="pillText"></span></button>
+
+<section id="off" hidden aria-labelledby="offTitle">
+  <div class="wrap">
+    <div class="top"><img src="icons/wordmark.png" alt="Armstrong"><div class="sub">Test Log</div></div>
+    <div class="banner" id="offTitle">No signal. You can still log your note: it is saved on this phone and sends by itself when you are back online.</div>
+    <form class="panel" id="offForm" novalidate>
+      <div class="field">
+        <label for="oName">Your name</label>
+        <input type="text" id="oName" autocomplete="name" maxlength="60">
+      </div>
+      <div class="field">
+        <label for="oNotes">What did you test, and how did it feel?</label>
+        <textarea id="oNotes" placeholder="Tap the microphone on your keyboard to talk."></textarea>
+        <p class="hint">Gear and sizes, conditions, what you compared, what you liked and didn't.</p>
+      </div>
+      <div class="field">
+        <label class="ghost" style="display:inline-block;margin:0">Add photos<input type="file" id="oPhoto" accept="image/*" multiple hidden></label>
+        <div id="thumbs"></div>
+      </div>
+      <button class="btn" id="oSave" type="submit">Save on phone</button>
+      <p id="offMsg" role="status" aria-live="polite"></p>
+    </form>
+
+    <div id="waitBox" hidden>
+      <h2>Waiting to send</h2>
+      <div id="waitList"></div>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <button class="ghost light" id="retry" type="button">Try connecting</button>
+      <button class="ghost light" id="openApp" type="button" hidden>Back online: open the full app</button>
+    </div>
+  </div>
+</section>
+
+<script src="queue.js"></script>
 <script>
-  // The Google Apps Script web app this shell opens. Change it here if you redeploy to a new URL.
-  const APP_URL = 'https://script.google.com/macros/s/AKfycbwvtK3GDZqI9ttoMjRIRTw-WCdBzgTr94LNnFyUkYcdEACE2UrdZ594GtW8b0EMUjQJLg/exec';
-
+  const MAX_PHOTOS = 4;
   const review = new URLSearchParams(location.search).has('review');
-  const frame = document.getElementById('app');
-  const splash = document.getElementById('splash');
+  const $ = (id) => document.getElementById(id);
+  const frame = $('app'), splash = $('splash');
+  const store = {
+    get(k) { try { return localStorage.getItem('tl.' + k) || ''; } catch (e) { return ''; } },
+    set(k, v) { try { localStorage.setItem('tl.' + k, v); } catch (e) {} },
+  };
+  let loaded = false, photos = [];
 
-  function showOffline() {
-    document.getElementById('msg').hidden = true;
-    document.getElementById('offline').style.display = 'block';
-    splash.classList.remove('gone');
-  }
-
-  if (!navigator.onLine) showOffline();
-  else {
+  /* ---------- live app ---------- */
+  function loadApp() {
+    if (!navigator.onLine) { showOffline(); return; }
     frame.src = APP_URL + (review ? '?review=1' : '');
-    frame.addEventListener('load', () => splash.classList.add('gone'));
-    setTimeout(() => { if (!navigator.onLine) showOffline(); }, 15000);
+    setTimeout(() => { if (!loaded) showOffline(); }, 15000);   // weak signal: let them log without waiting
   }
-  window.addEventListener('online', () => location.reload());
+  frame.addEventListener('load', () => {
+    if (!frame.src) return;
+    loaded = true; splash.classList.add('gone');
+    if (!$('off').hidden) {
+      if ($('oNotes').value.trim() || photos.length) $('openApp').hidden = false;   // don't throw away what they're typing
+      else $('off').hidden = true;
+    }
+  });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  /* ---------- offline form ---------- */
+  function showOffline() {
+    splash.classList.add('gone');
+    $('off').hidden = false;
+    $('offTitle').textContent = loaded
+      ? 'Notes saved on this phone. Anything that could not be sent is listed below.'
+      : 'No signal. You can still log your note: it is saved on this phone and sends by itself when you are back online.';
+    if (!$('oName').value) $('oName').value = store.get('tester');
+    if (!$('oNotes').value) $('oNotes').value = store.get('offDraft');
+    drawWaiting();
+  }
+  $('oName').addEventListener('change', () => store.set('tester', $('oName').value.trim()));
+  $('oNotes').addEventListener('input', () => store.set('offDraft', $('oNotes').value));
+  $('retry').onclick = () => location.reload();
+  $('openApp').onclick = () => { $('off').hidden = true; };
+
+  async function shrink(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const s = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.82);
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function drawThumbs() {
+    $('thumbs').innerHTML = '';
+    photos.forEach((src, i) => {
+      const f = document.createElement('figure'), im = document.createElement('img'), x = document.createElement('button');
+      im.src = src; im.alt = 'Photo ' + (i + 1);
+      x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove photo ' + (i + 1));
+      x.onclick = () => { photos.splice(i, 1); drawThumbs(); };
+      f.append(im, x); $('thumbs').appendChild(f);
+    });
+  }
+  $('oPhoto').onchange = async (e) => {
+    for (const f of Array.from(e.target.files || [])) {
+      if (photos.length >= MAX_PHOTOS) { say('Up to ' + MAX_PHOTOS + ' photos per note.', 'err'); break; }
+      try { photos.push(await shrink(f)); } catch (err) { say('One photo could not be read.', 'err'); }
+    }
+    e.target.value = ''; drawThumbs();
+  };
+  function say(msg, cls) { $('offMsg').textContent = msg; $('offMsg').className = cls || ''; }
+
+  const newId = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  $('offForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('oName').value.trim(), notes = $('oNotes').value.trim();
+    if (name.length < 2) { say('Add your name so the team knows who rode it.', 'err'); $('oName').focus(); return; }
+    if (!notes) { say('Say or type something first.', 'err'); $('oNotes').focus(); return; }
+    store.set('tester', name);
+    try {
+      await queue({ name, notes, photos: photos.slice(), clientId: newId(), recordedAt: new Date().toISOString() });
+    } catch (err) { say('Could not save on this phone (storage may be full). Your text is still here.', 'err'); return; }
+    $('oNotes').value = ''; store.set('offDraft', ''); photos = []; drawThumbs();
+    say('Saved on this phone. It sends by itself when you have signal.', 'ok');
+  });
+
+  /* ---------- outbox ---------- */
+  async function queue(entry) {
+    await TLQueue.add(entry);
+    try { const r = await navigator.serviceWorker.ready; if (r.sync) await r.sync.register('tl-outbox'); } catch (e) {}
+    refresh();
+    if (navigator.onLine) setTimeout(send, 3000);
+  }
+  async function send() {
+    if (!navigator.onLine) return;
+    try { await TLQueue.flush(); } catch (e) {}
+    refresh();
+  }
+  async function refresh() {
+    let list = [];
+    try { list = await TLQueue.all(); } catch (e) {}
+    const n = list.length;
+    $('pill').hidden = !n;
+    const stuck = list.filter((e) => e.failed).length;
+    $('pill').dataset.stuck = stuck ? '1' : '';
+    $('pillText').textContent = stuck ? (stuck === 1 ? '1 note could not be sent. Tap to see' : stuck + ' notes could not be sent. Tap to see')
+      : n === 1 ? '1 note waiting to send' : n + ' notes waiting to send';
+    if (!$('off').hidden) drawWaiting(list);
+    return list;
+  }
+  async function drawWaiting(list) {
+    if (!list) { try { list = await TLQueue.all(); } catch (e) { list = []; } }
+    $('waitBox').hidden = !list.length;
+    $('waitList').innerHTML = '';
+    list.forEach((e) => {
+      const d = document.createElement('div'); d.className = 'item';
+      const b = document.createElement('b');
+      b.textContent = new Date(e.recordedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        + ' · ' + e.name + (e.photos && e.photos.length ? ' · ' + e.photos.length + ' photo' + (e.photos.length > 1 ? 's' : '') : '');
+      d.appendChild(b);
+      d.appendChild(document.createTextNode(e.notes.length > 140 ? e.notes.slice(0, 140) + '…' : e.notes));
+      if (e.failed) {
+        const er = document.createElement('div'); er.className = 'err'; er.textContent = 'Could not be sent: ' + e.error; d.appendChild(er);
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'ghost light'; del.textContent = 'Remove';
+        del.onclick = async () => { await TLQueue.remove(e.clientId); refresh(); drawWaiting(); };
+        d.appendChild(del);
+      }
+      $('waitList').appendChild(d);
+    });
+  }
+  $('pill').onclick = () => {
+    if ($('pill').dataset.stuck) { showOffline(); $('openApp').hidden = false; return; }
+    $('pillText').textContent = 'Sending…'; send();
+  };
+
+  /* Notes handed over by the live app when its own send fails (no signal). Only Google's app pages are trusted. */
+  const TRUSTED = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|script\.google\.com)$/;
+  window.addEventListener('message', async (ev) => {
+    if (!TRUSTED.test(ev.origin) || !ev.data || typeof ev.data !== 'object') return;
+    if (ev.data.type === 'tl-name' && typeof ev.data.name === 'string' && ev.data.name) store.set('tester', ev.data.name.slice(0, 60));
+    if (ev.data.type === 'tl-queue' && ev.data.entry) {
+      const x = ev.data.entry;
+      if (typeof x.notes !== 'string' || typeof x.name !== 'string' || typeof x.clientId !== 'string') return;
+      try {
+        await queue({ name: x.name.slice(0, 60), notes: x.notes.slice(0, 20000), clientId: x.clientId.slice(0, 40),
+          recordedAt: x.recordedAt || new Date().toISOString(),
+          photos: (Array.isArray(x.photos) ? x.photos : []).filter((p) => /^data:image\//.test(p)).slice(0, MAX_PHOTOS) });
+        ev.source.postMessage({ type: 'tl-queued', clientId: x.clientId }, ev.origin);
+      } catch (e) {}
+    }
+  });
+
+  window.addEventListener('online', () => { send(); if (!loaded) { frame.removeAttribute('src'); loadApp(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) send(); });
+  setInterval(() => { if (!$('pill').hidden) send(); }, 60000);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('message', (ev) => { if (ev.data && ev.data.type === 'tl-sent') refresh(); });
+  }
+  loadApp();
+  refresh().then((list) => { if (list.length) send(); });
 </script>
 </body>
 </html>
