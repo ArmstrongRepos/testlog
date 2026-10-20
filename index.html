@@ -98,7 +98,10 @@
         <p class="hint">Gear and sizes, conditions, what you compared, what you liked and didn't.</p>
       </div>
       <div class="field">
-        <label class="ghost" style="display:inline-block;margin:0">Add photos<input type="file" id="oPhoto" accept="image/*" multiple hidden></label>
+        <div class="row">
+          <label class="ghost" style="display:inline-block;margin:0">Take photo<input type="file" id="oCamera" accept="image/*" capture="environment" hidden></label>
+          <label class="ghost" style="display:inline-block;margin:0">From gallery<input type="file" id="oPhoto" accept="image/*" multiple hidden></label>
+        </div>
         <div id="thumbs"></div>
       </div>
       <button class="btn" id="oSave" type="submit">Save on phone</button>
@@ -179,7 +182,7 @@
       f.append(im, x); $('thumbs').appendChild(f);
     });
   }
-  $('oPhoto').onchange = async (e) => {
+  $('oCamera').onchange = $('oPhoto').onchange = async (e) => {
     for (const f of Array.from(e.target.files || [])) {
       if (photos.length >= MAX_PHOTOS) { say('Up to ' + MAX_PHOTOS + ' photos per note.', 'err'); break; }
       try { photos.push(await shrink(f)); } catch (err) { say('One photo could not be read.', 'err'); }

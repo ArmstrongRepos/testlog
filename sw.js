@@ -2,7 +2,7 @@
 // The test log itself loads live from Google whenever there is a connection.
 importScripts('queue.js');
 
-const CACHE = 'test-log-shell-v4';
+const CACHE = 'test-log-shell-v5';
 const SHELL = ['./', 'index.html', 'queue.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-48.png', 'icons/wordmark.png'];
 
