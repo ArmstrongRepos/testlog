@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Armstrong Test Log</title>
+<meta name="theme-color" content="#0b3d91">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Log test feedback for the Armstrong R&D team.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-48.png" sizes="48x48">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Test Log">
+<style>
+  :root { --brand: #0b3d91; }
+  html, body { margin: 0; height: 100%; background: var(--brand); color: #fff; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--brand); }
+  #splash { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: var(--brand); transition: opacity .3s; }
+  #splash img { width: 96px; height: 96px; border-radius: 22px; }
+  #splash p { margin: 14px 0 0; opacity: .8; font-size: .95rem; }
+  #splash.gone { opacity: 0; pointer-events: none; }
+  #offline { display: none; margin-top: 18px; }
+  #offline button { margin-top: 12px; font: 700 1rem system-ui, sans-serif; color: var(--brand); background: #fff; border: 0; border-radius: 6px; padding: 12px 22px; }
+  @media (prefers-reduced-motion: reduce) { #splash { transition: none; } }
+</style>
+</head>
+<body>
+<iframe id="app" title="Armstrong Test Log" allow="microphone; camera; clipboard-write; fullscreen"></iframe>
+<div id="splash" role="status">
+  <div>
+    <img src="icons/icon-192.png" alt="">
+    <p id="msg">Loading the test log…</p>
+    <div id="offline">
+      <p>No connection right now. The test log needs internet to send feedback.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </div>
+  </div>
+</div>
+<script>
+  // The Google Apps Script web app this shell opens. Change it here if you redeploy to a new URL.
+  const APP_URL = 'https://script.google.com/macros/s/AKfycbwvtK3GDZqI9ttoMjRIRTw-WCdBzgTr94LNnFyUkYcdEACE2UrdZ594GtW8b0EMUjQJLg/exec';
+
+  const review = new URLSearchParams(location.search).has('review');
+  const frame = document.getElementById('app');
+  const splash = document.getElementById('splash');
+
+  function showOffline() {
+    document.getElementById('msg').hidden = true;
+    document.getElementById('offline').style.display = 'block';
+    splash.classList.remove('gone');
+  }
+
+  if (!navigator.onLine) showOffline();
+  else {
+    frame.src = APP_URL + (review ? '?review=1' : '');
+    frame.addEventListener('load', () => splash.classList.add('gone'));
+    setTimeout(() => { if (!navigator.onLine) showOffline(); }, 15000);
+  }
+  window.addEventListener('online', () => location.reload());
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
