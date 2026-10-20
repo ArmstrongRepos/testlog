@@ -1,8 +1,8 @@
 // Keeps the app shell available so it opens instantly and shows a friendly offline screen.
 // The test log itself always loads live from Google (feedback can't be sent offline).
-const CACHE = 'test-log-shell-v1';
+const CACHE = 'test-log-shell-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
-  'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-48.png'];
+  'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-48.png', 'icons/wordmark.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

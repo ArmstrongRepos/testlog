@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Armstrong Test Log</title>
 <meta name="theme-color" content="#0b3d91">
+<meta name="robots" content="noindex, nofollow">
 <meta name="description" content="Log test feedback for the Armstrong R&D team.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon-48.png" sizes="48x48">
@@ -18,8 +19,13 @@
   html, body { margin: 0; height: 100%; background: var(--brand); color: #fff; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--brand); }
   #splash { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: var(--brand); transition: opacity .3s; }
-  #splash img { width: 96px; height: 96px; border-radius: 22px; }
+  #splash img { width: min(260px, 70vw); height: auto; display: block; margin: 0 auto; }
+  #splash .sub { margin: 14px 0 0; font: 700 .8rem system-ui, sans-serif; letter-spacing: .32em; text-transform: uppercase; opacity: .85; }
   #splash p { margin: 14px 0 0; opacity: .8; font-size: .95rem; }
+  .bar { width: 120px; height: 3px; margin: 26px auto 0; background: rgba(255,255,255,.2); border-radius: 2px; overflow: hidden; }
+  .bar i { display: block; width: 40%; height: 100%; background: #e50c2b; border-radius: 2px; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  @media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; } }
   #splash.gone { opacity: 0; pointer-events: none; }
   #offline { display: none; margin-top: 18px; }
   #offline button { margin-top: 12px; font: 700 1rem system-ui, sans-serif; color: var(--brand); background: #fff; border: 0; border-radius: 6px; padding: 12px 22px; }
@@ -30,8 +36,9 @@
 <iframe id="app" title="Armstrong Test Log" allow="microphone; camera; clipboard-write; fullscreen"></iframe>
 <div id="splash" role="status">
   <div>
-    <img src="icons/icon-192.png" alt="">
-    <p id="msg">Loading the test log…</p>
+    <img src="icons/wordmark.png" alt="Armstrong">
+    <div class="sub">Test Log</div>
+    <div class="bar" id="msg" aria-label="Loading"><i></i></div>
     <div id="offline">
       <p>No connection right now. The test log needs internet to send feedback.</p>
       <button type="button" onclick="location.reload()">Try again</button>
