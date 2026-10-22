@@ -32,7 +32,7 @@ self.TLQueue = (() => {
   const update = (e) => tx('readwrite', (s) => s.put(e));
 
   async function send(e) {
-    const entry = { name: e.name, notes: e.notes, photos: e.photos || [], clientId: e.clientId, recordedAt: e.recordedAt };
+    const entry = { name: e.name, notes: e.notes, photos: e.photos || [], audio: e.audio, clientId: e.clientId, recordedAt: e.recordedAt };
     // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
     const res = await fetch(self.APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'save', entry }), redirect: 'follow' });

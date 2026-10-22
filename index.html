@@ -71,6 +71,21 @@
           background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 7px 14px; font: 600 .82rem system-ui, sans-serif;
           box-shadow: 0 4px 14px rgba(0,0,0,.3); cursor: pointer; }
   #pill i { width: 8px; height: 8px; border-radius: 50%; background: #ffb020; flex: none; }
+  /* Voice recorder */
+  #rec { position: fixed; inset: 0; z-index: 6; background: rgba(6,20,48,.94); display: grid; place-items: center; padding: 24px; text-align: center; }
+  #rec .ring { width: 132px; height: 132px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center; background: var(--red); border: 0; color: #fff; cursor: pointer;
+               box-shadow: 0 0 0 0 rgba(229,12,43,.5); animation: rec 1.6s infinite; }
+  #rec .ring.busy { background: rgba(255,255,255,.15); animation: none; cursor: default; }
+  #rec .ring span { width: 38px; height: 38px; border-radius: 6px; background: #fff; display: block; }
+  #rec .ring.busy span { width: 34px; height: 34px; border-radius: 50%; background: none; border: 4px solid rgba(255,255,255,.3); border-top-color: #fff; animation: spin .9s linear infinite; }
+  @keyframes rec { 70% { box-shadow: 0 0 0 26px rgba(229,12,43,0); } 100% { box-shadow: 0 0 0 0 rgba(229,12,43,0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #recTime { font: 700 2rem/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  #recMsg { margin: 10px auto 22px; max-width: 300px; opacity: .85; }
+  #rec .row { justify-content: center; }
+  .voiceTag { display: flex; align-items: center; gap: 10px; background: #eef2f9; border-radius: 8px; padding: 8px 12px; font-size: .9rem; margin-top: 10px; }
+  .voiceTag button { margin-left: auto; border: 0; background: none; font-size: 1.2rem; color: var(--ink); cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { #rec .ring { animation: none; } }
   @media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; } #splash { transition: none; } }
 </style>
 </head>
@@ -84,6 +99,19 @@
     <div class="bar" aria-label="Loading"><i></i></div>
   </div>
 </div>
+
+<section id="rec" hidden role="dialog" aria-modal="true" aria-labelledby="recTime">
+  <div>
+    <button class="ring" id="recStop" type="button" aria-label="Stop recording"><span></span></button>
+    <div id="recTime">0:00</div>
+    <p id="recMsg">Recording. Talk about what you rode, then tap stop.</p>
+    <div class="row">
+      <button class="ghost light" id="recCancel" type="button">Cancel</button>
+      <button class="ghost light" id="recRetry" type="button" hidden>Try again</button>
+      <button class="ghost light" id="recKeep" type="button" hidden>Save voice note to send later</button>
+    </div>
+  </div>
+</section>
 
 <button id="pill" type="button" hidden><i></i><span id="pillText"></span></button>
 
@@ -101,7 +129,9 @@
       </div>
       <div class="field">
         <label for="oNotes">What did you test, and how did it feel?</label>
-        <textarea id="oNotes" placeholder="Tap the microphone on your keyboard to talk."></textarea>
+        <textarea id="oNotes" placeholder="Type, or record a voice note."></textarea>
+        <button class="ghost" id="oRecord" type="button" style="margin-top:8px">Record voice note</button>
+        <div id="oVoice"></div>
         <p class="hint">Gear and sizes, conditions, what you compared, what you liked and didn't.</p>
       </div>
       <div class="field">
@@ -202,14 +232,120 @@
     e.preventDefault();
     const name = $('oName').value.trim(), notes = $('oNotes').value.trim();
     if (name.length < 2) { say('Add your name so the team knows who rode it.', 'err'); $('oName').focus(); return; }
-    if (!notes) { say('Say or type something first.', 'err'); $('oNotes').focus(); return; }
+    if (!notes && !offAudio) { say('Say or type something first.', 'err'); $('oNotes').focus(); return; }
     store.set('tester', name);
     try {
-      await queue({ name, notes, photos: photos.slice(), clientId: newId(), recordedAt: new Date().toISOString() });
+      await queue({ name, notes, photos: photos.slice(), audio: offAudio || undefined, clientId: newId(), recordedAt: new Date().toISOString() });
     } catch (err) { say('Could not save on this phone (storage may be full). Your text is still here.', 'err'); return; }
-    $('oNotes').value = ''; store.set('offDraft', ''); photos = []; drawThumbs();
+    $('oNotes').value = ''; store.set('offDraft', ''); photos = []; drawThumbs(); offAudio = null; drawVoice();
     say('Saved on this phone. It sends by itself when you have signal.', 'ok');
   });
+
+  /* ---------- voice notes ----------
+     The installed app records (it owns the microphone permission) and sends the audio to the test log's
+     server for speech to text. With no signal the recording is kept and turned into text when it sends. */
+  const Voice = (() => {
+    const pickType = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus']
+      .find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+    const toB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+    let mr = null, stream = null, chunks = [], t0 = 0, tick = null, resolveRec = null, cancelled = false;
+    const ui = (state, msg) => {
+      $('rec').hidden = state === 'closed';
+      $('recStop').classList.toggle('busy', state === 'busy' || state === 'error');
+      $('recStop').disabled = state !== 'recording';
+      $('recCancel').textContent = state === 'error' ? 'Discard' : 'Cancel';
+      $('recRetry').hidden = $('recKeep').hidden = true;
+      if (msg) $('recMsg').textContent = msg;
+    };
+    const supported = () => !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    // Opens the recorder; resolves with { b64, mime, secs } or null if cancelled.
+    async function record() {
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+      catch (e) { throw new Error('The microphone is blocked. Allow it for this app in your phone settings, or type instead.'); }
+      const type = pickType(); chunks = []; cancelled = false;
+      mr = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 32000 } : undefined);
+      mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise((res) => { resolveRec = res; });
+      mr.onstop = async () => {
+        clearInterval(tick); stream.getTracks().forEach((t) => t.stop());
+        const secs = Math.round((Date.now() - t0) / 1000);
+        if (cancelled) { resolveRec(null); return; }
+        const blob = new Blob(chunks, { type: (type || 'audio/webm').split(';')[0] });
+        if (blob.size < 2000) { resolveRec({ short: true }); return; }
+        resolveRec({ b64: await toB64(blob), mime: blob.type, secs });
+      };
+      $('recCancel').onclick = () => { cancel(); ui('closed'); };
+      t0 = Date.now(); mr.start(1000);
+      $('recTime').textContent = '0:00';
+      tick = setInterval(() => {
+        const s = Math.round((Date.now() - t0) / 1000);
+        $('recTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        if (s >= 15 * 60) stop();                                   // 15 minute cap
+      }, 500);
+      ui('recording', 'Recording. Talk about what you rode, then tap stop.');
+      return done;
+    }
+    function stop() { if (mr && mr.state !== 'inactive') mr.stop(); }
+    function cancel() { cancelled = true; if (mr && mr.state !== 'inactive') mr.stop(); else if (resolveRec) resolveRec(null); }
+    $('recStop').onclick = stop;
+
+    async function transcribe(audio) {
+      const res = await fetch(APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'transcribe', audio: { b64: audio.b64, mime: audio.mime } }), redirect: 'follow' });
+      const r = await res.json();
+      if (!r.ok) throw new Error(r.error || 'Speech to text failed');
+      return r.text || '';
+    }
+
+    // Record, then turn into text. Resolves { text } | { audio } (keep for later) | null (cancelled).
+    async function capture({ allowKeep }) {
+      let audio;
+      try { audio = await record(); }
+      catch (e) { ui('error', e.message); return waitChoice(null, false); }
+      if (!audio) { ui('closed'); return null; }
+      if (audio.short) { ui('error', 'That was too short. Try again.'); return waitChoice(null, false); }
+      return convert(audio, allowKeep);
+    }
+    async function convert(audio, allowKeep) {
+      if (!navigator.onLine) { ui('error', 'No signal, so it cannot be turned into text yet.'); return waitChoice(audio, allowKeep); }
+      ui('busy', 'Turning your voice note into text…');
+      try { const text = await transcribe(audio); ui('closed'); return { text }; }
+      catch (e) { ui('error', (navigator.onLine ? e.message : 'Lost signal.') + ''); return waitChoice(audio, allowKeep); }
+    }
+    function waitChoice(audio, allowKeep) {
+      $('recRetry').hidden = !audio; $('recKeep').hidden = !(audio && allowKeep);
+      return new Promise((res) => {
+        $('recRetry').onclick = () => res(convert(audio, allowKeep));
+        $('recKeep').onclick = () => { ui('closed'); res({ audio }); };
+        $('recCancel').onclick = () => { ui('closed'); res(null); };
+      });
+    }
+    $('recCancel').onclick = () => { cancel(); ui('closed'); };
+    return { supported, capture, transcribe };
+  })();
+
+  // Offline form: voice note → text now if there's signal, else attached and turned into text when it sends.
+  let offAudio = null;
+  function drawVoice() {
+    $('oVoice').innerHTML = '';
+    if (!offAudio) return;
+    const d = document.createElement('div'); d.className = 'voiceTag';
+    d.textContent = 'Voice note (' + Math.floor(offAudio.secs / 60) + ':' + String(offAudio.secs % 60).padStart(2, '0') + ') attached. It becomes text when it sends.';
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove voice note');
+    x.onclick = () => { offAudio = null; drawVoice(); };
+    d.appendChild(x); $('oVoice').appendChild(d);
+  }
+  if (!Voice.supported()) $('oRecord').hidden = true;
+  $('oRecord').onclick = async () => {
+    const r = await Voice.capture({ allowKeep: true });
+    if (!r) return;
+    if (r.text != null) {
+      const cur = $('oNotes').value.replace(/\s*$/, '');
+      $('oNotes').value = cur ? cur + '\n\n' + r.text : r.text; store.set('offDraft', $('oNotes').value);
+      say(r.text ? 'Done. Check the text, then save.' : 'No speech was heard.', r.text ? 'ok' : 'err');
+    } else if (r.audio) { offAudio = r.audio; drawVoice(); }
+  };
 
   /* ---------- outbox ---------- */
   async function queue(entry) {
@@ -245,7 +381,8 @@
       b.textContent = new Date(e.recordedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
         + ' · ' + e.name + (e.photos && e.photos.length ? ' · ' + e.photos.length + ' photo' + (e.photos.length > 1 ? 's' : '') : '');
       d.appendChild(b);
-      d.appendChild(document.createTextNode(e.notes.length > 140 ? e.notes.slice(0, 140) + '…' : e.notes));
+      const words = (e.audio ? '[Voice note] ' : '') + e.notes;
+      d.appendChild(document.createTextNode(words.length > 140 ? words.slice(0, 140) + '…' : words));
       if (e.failed) {
         const er = document.createElement('div'); er.className = 'err'; er.textContent = 'Could not be sent: ' + e.error; d.appendChild(er);
         const del = document.createElement('button'); del.type = 'button'; del.className = 'ghost light'; del.textContent = 'Remove';
@@ -265,6 +402,17 @@
   window.addEventListener('message', async (ev) => {
     if (!TRUSTED.test(ev.origin) || !ev.data || typeof ev.data !== 'object') return;
     if (ev.data.type === 'tl-name' && typeof ev.data.name === 'string' && ev.data.name) store.set('tester', ev.data.name.slice(0, 60));
+    if (ev.data.type === 'tl-hello') ev.source.postMessage({ type: 'tl-shell', voice: Voice.supported() }, ev.origin);
+    if (ev.data.type === 'tl-record') {
+      const src = ev.source, origin = ev.origin, name = store.get('tester');
+      src.postMessage({ type: 'tl-recording' }, origin);
+      const r = await Voice.capture({ allowKeep: name.length >= 2 });
+      if (r && r.text != null) src.postMessage({ type: 'tl-transcript', text: r.text }, origin);
+      else if (r && r.audio) {
+        await queue({ name, notes: '', photos: [], audio: r.audio, clientId: newId(), recordedAt: new Date().toISOString() });
+        src.postMessage({ type: 'tl-voice-cancel', msg: 'Voice note saved on this phone. It is logged by itself when you have signal.' }, origin);
+      } else src.postMessage({ type: 'tl-voice-cancel' }, origin);
+    }
     if (ev.data.type === 'tl-queue' && ev.data.entry) {
       const x = ev.data.entry;
       if (typeof x.notes !== 'string' || typeof x.name !== 'string' || typeof x.clientId !== 'string') return;
