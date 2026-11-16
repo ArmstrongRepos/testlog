@@ -407,11 +407,22 @@
   };
 
   /* Notes handed over by the live app when its own send fails (no signal). Only Google's app pages are trusted. */
+  const KEEP = ['tester', 'draft', 'token', 'name', 'sent'];
   const TRUSTED = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|script\.google\.com)$/;
   window.addEventListener('message', async (ev) => {
     if (!TRUSTED.test(ev.origin) || !ev.data || typeof ev.data !== 'object') return;
     if (ev.data.type === 'tl-name' && typeof ev.data.name === 'string' && ev.data.name) store.set('tester', ev.data.name.slice(0, 60));
-    if (ev.data.type === 'tl-hello') ev.source.postMessage({ type: 'tl-shell', voice: Voice.supported() }, ev.origin);
+    if (ev.data.type === 'tl-hello') {
+      // iPhone forgets the test log page's own storage between launches: hand back what it asked the app to keep.
+      const saved = {};
+      KEEP.forEach((k) => { saved[k] = store.get('app.' + k); });
+      if (!saved.tester) saved.tester = store.get('tester');
+      ev.source.postMessage({ type: 'tl-shell', voice: Voice.supported(), saved }, ev.origin);
+    }
+    if (ev.data.type === 'tl-store' && KEEP.indexOf(ev.data.k) >= 0 && typeof ev.data.v === 'string' && ev.data.v.length < 60000) {
+      store.set('app.' + ev.data.k, ev.data.v);
+      if (ev.data.k === 'tester' && ev.data.v) store.set('tester', ev.data.v);
+    }
     if (ev.data.type === 'tl-record') {
       const src = ev.source, origin = ev.origin, name = store.get('tester');
       src.postMessage({ type: 'tl-recording' }, origin);
