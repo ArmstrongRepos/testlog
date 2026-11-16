@@ -127,6 +127,10 @@
         <label for="oName">Your name</label>
         <input type="text" id="oName" autocomplete="name" maxlength="60">
       </div>
+      <div class="field row" style="gap:16px">
+        <label for="oWind" style="display:flex;align-items:center;gap:6px;margin:0">Wind <input type="text" id="oWind" inputmode="decimal" maxlength="4" style="width:4.5em;text-align:center"> kn</label>
+        <label for="oWaves" style="display:flex;align-items:center;gap:6px;margin:0">Waves <select id="oWaves" style="font:inherit;padding:8px;border-radius:8px;border:1.5px solid #c9d3e3"><option value="">not sure</option><option value="flat">Flat</option><option value="ankle">Ankle</option><option value="knee">Knee</option><option value="waist">Waist</option><option value="chest">Chest</option><option value="head">Head</option><option value="overhead">Overhead</option><option value="double overhead">Double overhead</option></select></label>
+      </div>
       <div class="field">
         <label for="oNotes">What did you test, and how did it feel?</label>
         <textarea id="oNotes" placeholder="Type, or record a voice note."></textarea>
@@ -190,6 +194,10 @@
       ? 'Notes saved on this phone. Anything that could not be sent is listed below.'
       : 'No signal. You can still log your note: it is saved on this phone and sends by itself when you are back online.';
     if (!$('oName').value) $('oName').value = store.get('tester');
+    try {
+      const c = JSON.parse(store.get('app.cond') || 'null');
+      if (c && Date.now() - c.at < 6 * 3600 * 1000 && !$('oWind').value && !$('oWaves').value) { $('oWind').value = c.wind || ''; $('oWaves').value = c.waves || ''; }
+    } catch (e) {}
     if (!$('oNotes').value) $('oNotes').value = store.get('offDraft');
     drawWaiting();
   }
@@ -235,7 +243,8 @@
     if (!notes && !offAudio) { say('Say or type something first.', 'err'); $('oNotes').focus(); return; }
     store.set('tester', name);
     try {
-      await queue({ name, notes, photos: photos.slice(), audio: offAudio || undefined, clientId: newId(), recordedAt: new Date().toISOString() });
+      await queue({ name, notes, photos: photos.slice(), audio: offAudio || undefined, clientId: newId(), recordedAt: new Date().toISOString(),
+        wind_kn: $('oWind').value.trim(), waves: $('oWaves').value });
     } catch (err) { say('Could not save on this phone (storage may be full). Your text is still here.', 'err'); return; }
     $('oNotes').value = ''; store.set('offDraft', ''); photos = []; drawThumbs(); offAudio = null; drawVoice();
     say('Saved on this phone. It sends by itself when you have signal.', 'ok');
@@ -407,7 +416,7 @@
   };
 
   /* Notes handed over by the live app when its own send fails (no signal). Only Google's app pages are trusted. */
-  const KEEP = ['tester', 'draft', 'token', 'name', 'sent'];
+  const KEEP = ['tester', 'draft', 'token', 'name', 'sent', 'cond'];
   const TRUSTED = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|script\.google\.com)$/;
   window.addEventListener('message', async (ev) => {
     if (!TRUSTED.test(ev.origin) || !ev.data || typeof ev.data !== 'object') return;
@@ -438,6 +447,7 @@
       if (typeof x.notes !== 'string' || typeof x.name !== 'string' || typeof x.clientId !== 'string') return;
       try {
         await queue({ name: x.name.slice(0, 60), notes: x.notes.slice(0, 20000), clientId: x.clientId.slice(0, 40),
+          wind_kn: String(x.wind_kn || '').slice(0, 6), waves: String(x.waves || '').slice(0, 20),
           recordedAt: x.recordedAt || new Date().toISOString(),
           photos: (Array.isArray(x.photos) ? x.photos : []).filter((p) => /^data:image\//.test(p)).slice(0, MAX_PHOTOS) });
         ev.source.postMessage({ type: 'tl-queued', clientId: x.clientId }, ev.origin);
